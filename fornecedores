@@ -1,0 +1,708 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Painel de Prospecção de Parceiros - Ambev</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Chosen Palette: Corporate Neutral -->
+    <!-- Application Structure Plan: The application is designed as an interactive dashboard for strategic partner prospecting. The core user flow is filter-based, allowing users to drill down from Region -> State -> Ambev Unit. This hierarchical structure is more intuitive than a flat list of 21 units, making navigation efficient. The main view is a two-column grid: one for a summary visualization (suppliers per state chart) and the other for detailed, dynamically updated content (market analysis, supplier table). This separation of overview and detail allows users to maintain context while exploring specific data. Strategic recommendations are placed in a separate, accessible section to avoid cluttering the primary data exploration interface. This structure was chosen to transform a static report into a task-oriented tool, prioritizing quick access to actionable information for specific operational units. -->
+    <!-- Visualization & Content Choices: 
+        - Goal: Inform (Overview) -> Bar Chart (Chart.js/Canvas) -> Interaction: Hover for details -> Justification: Provides a quick, high-level comparison of supplier market density across states.
+        - Goal: Organize (Navigation) -> Dependent Dropdowns (HTML/JS) -> Interaction: Selection triggers content update -> Justification: Creates a logical, guided path for the user to find a specific Ambev unit among many options.
+        - Goal: Inform (Detail) -> Dynamic Text Blocks & Interactive Table (HTML/JS) -> Interaction: Filter/Search within the table -> Justification: Presents all relevant data for a selected unit in a clear, structured format. The table search enhances usability by allowing users to quickly find specific suppliers.
+        - Goal: Strategic Guidance -> Structured HTML/CSS in a toggleable section -> Interaction: Click to show/hide -> Justification: Makes crucial strategic advice readily available without overwhelming the main data interface.
+        - Goal: Action (AI-Powered) -> Button triggers Gemini API call -> Interaction: Click to generate contact message -> Justification: Adds a powerful, time-saving feature that leverages AI to assist the user's workflow directly within the application, turning data into immediate, actionable communication.
+        - Goal: Expand (AI-Powered Search & Manual Entry) -> Forms trigger JS functions -> Interaction: User input adds new data to the session -> Justification: Transforms the static dashboard into a dynamic, interactive platform where users can expand the dataset during their session, simulating a real-world application with a database.
+    -->
+    <!-- CONFIRMATION: NO SVG graphics used. NO Mermaid JS used. -->
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f8f9fa;
+        }
+        .card {
+            background-color: white;
+            border-radius: 0.75rem;
+            box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+            transition: box-shadow 0.3s ease-in-out;
+        }
+        .card:hover {
+            box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -2px rgb(0 0 0 / 0.1);
+        }
+        .custom-select {
+            -webkit-appearance: none;
+            -moz-appearance: none;
+            appearance: none;
+            background-image: url('data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20width%3D%22292.4%22%20height%3D%22292.4%22%3E%3Cpath%20fill%3D%22%236B7280%22%20d%3D%22M287%2069.4a17.6%2017.6%200%200%200-13-5.4H18.4c-5%200-9.3%201.8-12.9%205.4A17.6%2017.6%200%200%200%200%2082.2c0%205%201.8%209.3%205.4%2012.9l128%20127.9c3.6%203.6%207.8%205.4%2012.8%205.4s9.2-1.8%2012.8-5.4L287%2095c3.5-3.5%205.4-7.8%205.4-12.8%200-5-1.9-9.2-5.5-12.8z%22/%3E%3C/svg%3E');
+            background-repeat: no-repeat;
+            background-position: right 0.75rem center;
+            background-size: 0.65em auto;
+        }
+        #unitDetailContainer h3 {
+            font-size: 1.25rem;
+            font-weight: 600;
+            color: #1e3a8a;
+            margin-bottom: 1rem;
+            padding-bottom: 0.5rem;
+            border-bottom: 2px solid #e0e7ff;
+        }
+        #unitDetailContainer h4 {
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: #1f2937;
+            margin-top: 1.5rem;
+            margin-bottom: 0.75rem;
+        }
+        .modal-overlay {
+            background-color: rgba(0, 0, 0, 0.5);
+        }
+        .loader {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #3498db;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body class="text-gray-800">
+
+    <div class="container mx-auto p-4 md:p-8">
+
+        <header class="text-center mb-8">
+            <h1 class="text-3xl md:text-4xl font-bold text-gray-900">Painel de Prospecção de Parceiros</h1>
+            <p class="text-lg text-gray-600 mt-2">Plataforma Dinâmica de Fornecedores para a Rede Ambev</p>
+        </header>
+
+        <div class="card p-6 mb-8">
+            <h2 class="text-xl font-semibold mb-4 text-gray-700">Expandir Prospecção</h2>
+            <p class="text-gray-600 mb-4">Adicione uma nova unidade da Ambev para pesquisar fornecedores locais usando IA. <strong class="text-red-600">Atenção:</strong> os dados adicionados são temporários e serão perdidos ao recarregar a página.</p>
+            <form id="addUnitForm" class="grid grid-cols-1 md:grid-cols-6 gap-4 items-end">
+                <div class="md:col-span-2">
+                    <label for="newUnitName" class="block mb-2 text-sm font-medium text-gray-900">Nome da Unidade</label>
+                    <input type="text" id="newUnitName" class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5" placeholder="Ex: CDD Nova Unidade" required>
+                </div>
+                <div>
+                    <label for="newUnitCity" class="block mb-2 text-sm font-medium text-gray-900">Cidade</label>
+                    <input type="text" id="newUnitCity" class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5" placeholder="Ex: Curitiba" required>
+                </div>
+                <div>
+                    <label for="newUnitState" class="block mb-2 text-sm font-medium text-gray-900">Estado</label>
+                    <input type="text" id="newUnitState" class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5" placeholder="Ex: PR" required>
+                </div>
+                 <div>
+                    <label for="newUnitRegion" class="block mb-2 text-sm font-medium text-gray-900">Região</label>
+                    <input type="text" id="newUnitRegion" class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5" placeholder="Ex: Sul" required>
+                </div>
+                <div class="md:col-span-6">
+                     <label for="newUnitAddress" class="block mb-2 text-sm font-medium text-gray-900">Endereço</label>
+                    <input type="text" id="newUnitAddress" class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5" placeholder="Endereço completo da unidade" required>
+                </div>
+                <div class="md:col-span-6">
+                    <button type="submit" class="w-full bg-green-600 text-white p-3 rounded-lg hover:bg-green-700 transition duration-300 flex items-center justify-center">
+                        <span id="addUnitBtnText">Buscar Fornecedores com IA ✨</span>
+                        <div id="addUnitLoader" class="loader w-6 h-6 border-2 border-t-green-500 hidden"></div>
+                    </button>
+                </div>
+            </form>
+            <div id="addUnitFeedback" class="text-center mt-4"></div>
+        </div>
+
+        <div class="card p-6 mb-8">
+            <h2 class="text-xl font-semibold mb-4 text-gray-700">Filtros de Pesquisa</h2>
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <select id="regionFilter" class="custom-select w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                    <option value="">Selecione uma Região</option>
+                </select>
+                <select id="stateFilter" class="custom-select w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500" disabled>
+                    <option value="">Selecione um Estado</option>
+                </select>
+                <select id="unitFilter" class="custom-select w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500" disabled>
+                    <option value="">Selecione uma Unidade</option>
+                </select>
+                <button id="resetButton" class="w-full bg-gray-600 text-white p-3 rounded-lg hover:bg-gray-700 transition duration-300">Limpar Filtros</button>
+            </div>
+        </div>
+
+        <main class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            <div class="lg:col-span-1">
+                <div class="card p-6 h-full">
+                    <h3 class="text-xl font-semibold mb-2 text-gray-700">Fornecedores por Estado</h3>
+                    <div class="chart-container relative h-96 w-full max-w-xl mx-auto">
+                        <canvas id="suppliersByStateChart"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <div id="unitDetailContainer" class="lg:col-span-2 card p-6 min-h-[400px]">
+                <div id="initialMessage" class="flex flex-col items-center justify-center h-full text-center">
+                    <svg class="w-16 h-16 text-gray-300 mb-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m5.231 13.481L15 17.25m-4.5-15H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9zm3.75 11.625a2.625 2.625 0 11-5.25 0 2.625 2.625 0 015.25 0z" />
+                    </svg>
+                    <h3 class="text-xl font-semibold text-gray-500">Selecione uma unidade para ver os detalhes</h3>
+                    <p class="text-gray-400 mt-2">Use os filtros acima para encontrar informações sobre análises de mercado e potenciais parceiros locais.</p>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Modal for Gemini API -->
+    <div id="geminiModal" class="fixed inset-0 z-50 items-center justify-center hidden p-4 modal-overlay">
+        <div class="relative w-full max-w-2xl mx-auto bg-white rounded-lg shadow-xl">
+            <div class="flex items-start justify-between p-5 border-b rounded-t">
+                <h3 class="text-xl font-semibold text-gray-900">Mensagem de Contato Gerada por IA</h3>
+                <button type="button" id="closeModalBtn" class="text-gray-400 bg-transparent hover:bg-gray-200 hover:text-gray-900 rounded-lg text-sm p-1.5 ml-auto inline-flex items-center">
+                    <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg"><path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd"></path></svg>
+                </button>
+            </div>
+            <div id="modalBody" class="p-6 space-y-6">
+                <div id="loader" class="flex justify-center items-center h-48">
+                    <div class="loader"></div>
+                </div>
+                <div id="messageContent" class="hidden">
+                    <textarea id="generatedMessage" rows="10" class="w-full p-2.5 text-sm text-gray-900 bg-gray-50 rounded-lg border border-gray-300 focus:ring-blue-500 focus:border-blue-500" readonly></textarea>
+                </div>
+            </div>
+            <div class="flex items-center p-6 space-x-2 border-t border-gray-200 rounded-b">
+                <button id="copyMessageBtn" type="button" class="text-white bg-blue-700 hover:bg-blue-800 focus:ring-4 focus:outline-none focus:ring-blue-300 font-medium rounded-lg text-sm px-5 py-2.5 text-center">Copiar Texto</button>
+                <span id="copyFeedback" class="text-sm text-green-600 hidden">Copiado!</span>
+            </div>
+        </div>
+    </div>
+
+
+    <script>
+        let data = {
+            units: [
+                { id: 'vr', name: 'CDD VOLTA REDONDA', city: 'Volta Redonda', state: 'RJ', region: 'Sudeste', address: 'RUA LUCIO MEIRA, BR-393, 13550 - Dom Bosco', analysis: 'O mercado em Volta Redonda é robusto e competitivo, com uma clara distinção entre serviços básicos de "Lava Rápido" e centros de "Estética Automotiva". Isso oferece uma gama de opções, desde alto volume e menor custo até parceiros de alta qualidade e especializados.', suppliers: [
+                    { name: 'ESTÉTICA AUTOMOTIVA PRODETAIL', address: 'Rua Cincinato Braga, 160, Aterrado', phone: '(24) 99967-5550', profile: 'Centro de estética completo. Apresenta-se de forma profissional, adequado para veículos de alto valor.' },
+                    { name: 'PADDOCK ECOWASH', address: 'Rua Vinte e Três-B, 32 - Estacionamento Supermercado Extra', phone: '(24) 3340-7462', profile: 'Lava-rápido com foco ecológico, sugerindo conveniência e potencial para alto volume.' },
+                    { name: 'Diamond Produtos Automotivos', address: 'Av. Lucas Evangelista, 170 - Aterrado', phone: '(24) 99922-4522', profile: 'Fornecedor de produtos, pode ter fortes conexões e servir como fonte de inteligência de mercado.' },
+                    { name: 'Vaporion Estética Automotiva', address: 'Bairro 249 (Endereço a confirmar)', phone: 'Contato via Website', profile: 'Especializada em lavagem a vapor e proteção de pintura. Perfil de serviço premium.' },
+                    { name: 'Lava Jato Ruan', address: 'Não especificado', phone: '(24) 99219-1067', profile: 'Anunciado com foco em qualidade e preço. Perfil de operador independente.' },
+                ]},
+                { id: 'campos', name: 'CDD CAMPOS', city: 'Campos dos Goytacazes', state: 'RJ', region: 'Sudeste', address: 'Av. Pres. Vargas, 510 - Santa Cruz', analysis: 'Campos dos Goytacazes apresenta uma mistura de lava-jatos tradicionais e empresas de estética especializadas. A presença de um fornecedor dedicado de produtos (Shine Back) sugere um mercado local maduro para serviços de detalhamento.', suppliers: [
+                    { name: 'Campos Car Wash Estética Automotiva', address: 'Av. 28 de Março, 502', phone: '(22) 99705-1838', profile: 'Oferece agendamento e aceita cartões, indicando uma operação estruturada.' },
+                    { name: 'Shine Back', address: 'Rua Doutor Gastão Viana Sampaio, 189', phone: '(22) 99731-1043', profile: 'Revendedor especializado em produtos. Excelente fonte de indicações dos melhores operadores locais.' },
+                    { name: 'CEV CAR', address: 'Endereço a confirmar', phone: 'Não informado', profile: '"Centro de Estética Veicular" com foco em serviço diferenciado e qualidade.' },
+                    { name: 'LinCar | Higienização e Estética', address: 'Endereço a confirmar', phone: 'Não informado', profile: 'Foco em serviços de maior valor agregado do que a lavagem simples.' },
+                    { name: 'Lava a Jato Leopoldina', address: 'Av. Alberto Torres, 579', phone: 'Não informado', profile: 'Bem avaliado, potencial parceiro para serviços de alto volume e manutenção regular.' },
+                ]},
+                { id: 'itaperuna', name: 'CDL ITAPERUNA', city: 'Itaperuna', state: 'RJ', region: 'Sudeste', address: 'Rod. BR 356, 3000 - Boa Fortuna', analysis: 'A pesquisa identificou um fornecedor principal de alta qualidade, a AutoEstetic, que se apresenta como um centro automotivo completo. A falta de alternativas prontamente disponíveis sugere um mercado menos competitivo, exigindo esforço maior para diversificar parceiros.', suppliers: [
+                    { name: 'AUTOESTETIC - CENTRO AUTOMOTIVO', address: 'Rua Coronel José Bastos, 2162', phone: '(22) 9764-3339', profile: 'Centro automotivo completo e profissional. Principal candidato a parceiro estratégico.' },
+                ]},
+                { id: 'friburgo', name: 'CDD NOVA FRIBURGO', city: 'Nova Friburgo', state: 'RJ', region: 'Sudeste', address: 'Av. Gov. Roberto Silveira, 3150 - Duas Pedras', analysis: 'O cenário em Nova Friburgo parece diversificado e bem estabelecido. Listagens da associação comercial local (ACIANF) fornecem empresas credíveis e verificadas, um forte indicador de negócios estabelecidos. A oferta de serviços de busca e entrega é um diferencial logístico importante.', suppliers: [
+                    { name: 'Fri Lavel - Lava-Jato', address: 'Rua Carlos Alberto Braune, 218, Centro', phone: '(22) 2526-0371', profile: 'Listado pela associação comercial, indicando credibilidade.' },
+                    { name: 'Garage Estética Automotiva', address: 'Localizado no Cadima Shopping', phone: '(22) 99941-4335', profile: 'Localização em shopping sugere foco na conveniência e padrão profissional.' },
+                    { name: 'Lava Jato Ligeirinho', address: 'Avenida Conselheiro Julius Arp, 559', phone: '(22) 2523-4279', profile: 'Oferece o diferencial de buscar e entregar o veículo, um benefício logístico valioso.' },
+                    { name: 'Auto Estética Automotiva', address: 'Serviço de entrega (delivery)', phone: 'Contato via Website', profile: 'Especializada em lavagem por delivery com agendamento, ideal para otimizar a rotina de uma frota.' },
+                ]},
+                { id: 'jacarepagua', name: 'CDD JACAREPAGUÁ', city: 'Rio de Janeiro', state: 'RJ', region: 'Sudeste', address: 'Estr. de Jacarepagua, 5895 - Anil', analysis: 'Sendo uma grande área metropolitana, Jacarepaguá oferece alta densidade de parceiros. O desafio é a seleção. Há desde pequenos operadores locais até empresas profissionalizadas com foco em serviços especializados. A presença de um grande fornecedor de produtos como a SBRIO é um ponto estratégico para inteligência de mercado.', suppliers: [
+                    { name: 'VTI | Estética Automotiva', address: 'Estrada do Engenho D\'Água, 1200, Anil', phone: '(21) 99778-4920', profile: 'Oficina com forte presença online e serviços especializados, indicando alto padrão de qualidade.' },
+                    { name: 'Garagem 707 - Estética Automotiva', address: 'R. Araguaia, 707 - Freguesia', phone: 'Não informado', profile: 'Bem avaliado, com foco em estética, sugerindo serviços além da lavagem básica.' },
+                    { name: 'Acquazero Eco Wash', address: 'Estr. dos Três Rios, 1619 - Freguesia', phone: 'Não informado', profile: 'Parte de uma grande franquia nacional com padrão de serviço consistente.' },
+                    { name: 'Lava Jato Sai de Baixo', address: 'Estr. de Jacarepaguá, 6945 - Anil', phone: 'Não informado', profile: 'Localizado na mesma via da unidade Ambev, uma vantagem logística significativa.' },
+                    { name: 'SBRIO', address: 'Estr. do Gabinal, 1521 - Freguesia', phone: '(21) 2424-5696', profile: 'Fornecedor de produtos. Não é prestador de serviço, mas pode render indicações valiosas.' },
+                ]},
+                { id: 'petropolis', name: 'CDD PETRÓPOLIS', city: 'Petrópolis', state: 'RJ', region: 'Sudeste', address: 'RUA MARIO GELLI, 119 - Duarte Silveira', analysis: 'Petrópolis possui um mercado bem documentado com empresas que demonstram práticas de negócios modernas. Empresas como a LavaLá oferecem serviços de entrega (delivery), uma vantagem logística considerável para a gestão de frotas.', suppliers: [
+                    { name: 'LavaLá', address: 'Hiper Shopping e Fábrica São Pedro', phone: '(24) 99330-2207', profile: 'Empresa moderna com múltiplos locais, agendamento via WhatsApp e serviço de entrega.' },
+                    { name: 'Amigos Unidos Serviços de Lava Jato', address: 'Estrada União e Industria, 11880 - Itaipava', phone: '(24) 9213-7976', profile: 'Lava-jato tradicional localizado em Itaipava, com múltiplos contatos.' },
+                    { name: 'We Wash | Estética Automotiva', address: 'Rua Doutor Paulo Herve 1162', phone: 'Não informado', profile: 'Oferece serviço de busca e entrega. Foco em limpeza detalhada.' },
+                    { name: 'Posto Montecaseros (Lava Jato)', address: 'Rua Montecaseros, 165', phone: '(24) 2237-1197', profile: 'Serviço integrado a posto de gasolina, pode oferecer conveniência.' },
+                    { name: 'Salão do Polimento', address: 'Estrada União e Indústria, 1667 - Correas', phone: '(24) 2221-2159', profile: 'Especializado em polimento e higienização, adequado para serviços de restauração.' },
+                ]},
+                { id: 'mogi', name: 'CDD MOGI MIRIM', city: 'Mogi Mirim', state: 'SP', region: 'Sudeste', address: 'Rua João Finazzi, 55, Centro', analysis: 'A pesquisa revelou um forte fornecedor local, a Revive Kar. Outros resultados foram menos específicos, apontando para regiões próximas. A construção de uma lista diversificada de cinco fornecedores locais exigirá uma pesquisa mais aprofundada.', suppliers: [
+                    { name: 'Revive Kar - Estética Automotiva', address: 'Av. Maria Palhares Cassimiro, 381', phone: '(19) 99604-7921', profile: 'Especializada desde 1994. Forte presença local e experiência são indicadores de confiabilidade.' },
+                ]},
+                { id: 'pelotas', name: 'CDD PELOTAS', city: 'Pelotas', state: 'RS', region: 'Sul', address: 'AV presidente joao goulart, 9500 - Fragata', analysis: 'O mercado de Pelotas é bem estruturado, com vários "Auto Centers" que oferecem um conjunto completo de serviços. Empresas como a Montedo e a Satte Alam se apresentam como operações profissionais, adequadas para contratos corporativos.', suppliers: [
+                    { name: 'Montedo Auto Center', address: 'R. Marcílio Dias, 3212 - Centro', phone: '(53) 3228-5569', profile: 'Mais de 9 anos de experiência, com portfólio completo de serviços.' },
+                    { name: 'Satte Alam Motors', address: 'Av. Bento Gonçalves, 5248 - Centro', phone: '(53) 3026-1234', profile: 'Concessionária com departamento de serviços robusto e tecnologia de ponta.' },
+                    { name: 'Zatso44 Performance e Estética', address: 'R. Santos Dumont, 810 - Centro', phone: '(53) 98100-3333', profile: 'Focada em performance e estética, sugerindo alto padrão de qualidade.' },
+                    { name: 'In Beleze Auto Center', address: 'Rua Marcio Dias 111', phone: '(53) 3305-3044', profile: 'Focado em estética, funilaria e pintura, promovendo "qualidade e agilidade".' },
+                ]},
+                { id: 'eldorado', name: 'CDD PORTO ALEGRE', city: 'Eldorado do Sul', state: 'RS', region: 'Sul', address: 'AV INDUSTRIAL BELGRAF 765', analysis: 'Eldorado do Sul possui vários operadores menores e aparentemente independentes. Nomes como "Zé Louco" sugerem empresas familiares. Embora potencialmente econômicas, exigiriam uma avaliação cuidadosa de profissionalismo e capacidade para um contrato corporativo.', suppliers: [
+                    { name: 'Zé Louco - Lava Jato e Higienização', address: 'Rua Brasil, 377', phone: '(51) 98121-8532', profile: 'Apresenta-se como o "melhor em lavagens completas e express". Perfil de negócio local.' },
+                    { name: 'Medicar Oficina Mecânica', address: 'Avenida Emancipação, 555', phone: '(51) 98538-6983', profile: 'Foco em mecânica, mas oferece "reparos automotivos estéticos".' },
+                    { name: 'Garage R&A Lavagem e Estética', address: 'R. Laguna, 584 - Medianeira', phone: 'Não informado', profile: 'Avaliação muito alta (4.9), forte indicador de qualidade e satisfação do cliente.' },
+                ]},
+                { id: 'joinville', name: 'CDD JOINVILLE', city: 'Joinville', state: 'SC', region: 'Sul', address: 'Rua Anamburgo 2500 - Vila Nova', analysis: 'Joinville apresenta um mercado digitalmente maduro. Os parceiros potenciais possuem websites profissionais e menus de serviços claros. Empresas como a Thalentus comercializam "detalhamento premium", indicando capacidade de serviço de alta qualidade.', suppliers: [
+                    { name: 'Clean Car Estética Automotiva', address: 'Rua Adolpho Ernesto Fisher 24', phone: '(47) 99639-1993', profile: 'Gama de serviços desde lavagem a polimento técnico, com hora marcada.' },
+                    { name: 'Kings Estética Automotiva', address: 'Não especificado', phone: '(47) 99937-0683', profile: 'Focado em "car detailing" de alto padrão. Forte presença em redes sociais.' },
+                    { name: 'Thalentus Estética Automotiva', address: 'Rua Minas Gerais 3363', phone: '(47) 3438-2795', profile: 'Com 30 anos de mercado, é um especialista estabelecido e confiável.' },
+                    { name: 'Carlach Detalhamento Automotivo', address: 'Não especificado', phone: '(47) 99739-6320', profile: 'Posiciona-se como estúdio de detalhamento premium com uma década de experiência.' },
+                    { name: 'CarShow Centro Técnico Automotivo', address: 'Rua Itaiópolis, 661 - América', phone: '(47) 3427-0835', profile: 'Centro técnico completo, podendo ser um parceiro "one-stop-shop".' },
+                ]},
+                { id: 'camacari', name: 'CDL CAMAÇARI', city: 'Camaçari', state: 'BA', region: 'Nordeste', address: 'R. João Ursulo, 1620', analysis: 'A pesquisa para Camaçari identificou várias opções, incluindo um modelo de franquia (Acquazero), que oferece um padrão de serviço consistente, e empresas locais estabelecidas como o Centro Automotivo Amorim, com mais de 30 anos de mercado.', suppliers: [
+                    { name: 'Acquazero Camaçari', address: 'Não especificado', phone: '0800 001 0050', profile: 'Parte de uma grande rede de franquias com foco em limpeza ecológica.' },
+                    { name: 'Centro Automotivo Amorim', address: 'Avenida Radial C, 11, Centro', phone: '(71) 3621-0209', profile: 'Estabelecido desde 1988. A longevidade é um forte indicador de confiabilidade.' },
+                    { name: 'Lavô Camaçari', address: 'Estrada do Coco, BA-099 KM 8', phone: 'Contato via Website', profile: 'Lava-jato em modelo de autoatendimento. Localização estratégica em posto Shell.' },
+                ]},
+                { id: 'feira', name: 'CDD FEIRA DE SANTANA', city: 'Feira de Santana', state: 'BA', region: 'Nordeste', address: 'EST VELHA DE HUMILDES SN, HUMILDES', analysis: 'Feira de Santana possui um grande número de lava-jatos, indicando um mercado grande, mas potencialmente fragmentado. O desafio será identificar empresas maiores e mais profissionais, como a Escuderia Estética Automotiva, que possui uma avaliação excelente (5 estrelas).', suppliers: [
+                    { name: 'Escuderia Estética Automotiva', address: 'R. Juarez Távora, 498', phone: 'Não informado', profile: 'Altamente avaliado, com foco em polimento, vitrificação e lavagem. Forte candidato.' },
+                    { name: 'Jr Lava Jato Esteticar', address: 'R. Cel. José Pinto dos Santos, 943', phone: 'Não informado', profile: 'Combina lava-jato com estética, indicando oferta mais completa. Bem avaliado.' },
+                    { name: 'Auto Expresso', address: 'R. Leolinda Bacelar Lima, 610 - Centro', phone: 'Não informado', profile: 'Bem localizado e com grande número de avaliações positivas, indicando popularidade.' },
+                ]},
+                { id: 'ilheus', name: 'CDD ILHÉUS', city: 'Ilhéus', state: 'BA', region: 'Nordeste', address: 'ROD ILHEUS URUCUCA SN, IGUAPE', analysis: 'Os dados para Ilhéus apontam para centros profissionais como o Gelcar Auto Center, que atende as principais seguradoras do país, um forte indicador de processos B2B maduros. A presença de um revendedor local da marca Vonixx (EUROCAR) também é um sinal positivo de um mercado saudável.', suppliers: [
+                    { name: 'Gelcar Auto Center', address: 'Av. Roberto Santos, 567 - Malhado', phone: '(73) 3231-9861', profile: 'Centro automotivo completo. Atende grandes seguradoras, indicando profissionalismo.' },
+                    { name: 'EUROCAR PRODUTOS', address: 'Avenida Itabuna, 1015 - Centro', phone: '(73) 98111-9848', profile: 'Revendedor Vonixx. Excelente ponto de contato para obter referências dos melhores profissionais.' },
+                ]},
+                { id: 'lapa', name: 'CDD BOM JESUS DA LAPA', city: 'Bom Jesus da Lapa', state: 'BA', region: 'Nordeste', address: 'AV TARCILO VIEIRA DE MELLO 3470, MIRANTE', analysis: 'Um diretório local foi a principal fonte para esta localidade, fornecendo uma rica lista de lava-jatos com endereços e números de telefone. Empresas como a Estéticar Serviços Automotivos oferecem contato direto via WhatsApp, mostrando profissionalismo e acessibilidade.', suppliers: [
+                    { name: 'Lava Jato BR', address: 'Avenida Manoel Novais, s/n, Centro', phone: '(77) 99972-4641', profile: 'Bem localizado no centro, com múltiplos contatos telefônicos.' },
+                    { name: 'Lavajato Avenida', address: 'Rua Guararapes, s/n, Amaralina', phone: '(77) 99972-0428', profile: 'Oferece contato direto via WhatsApp, o que agiliza a comunicação.' },
+                    { name: 'Lavajato Gabi', address: 'Avenida Almirante Beirute, S/N, Cavalhada', phone: '(77) 99934-2486', profile: 'Oferece busca e entrega de veículos, um serviço de grande valor logístico.' },
+                    { name: 'Estéticar Serviços Automotivos', address: 'Rua Botafogo, 826, São João', phone: '(77) 99178-0273', profile: 'Posiciona-se como um serviço de estética, não apenas um lava-jato.' },
+                ]},
+                { id: 'guanambi', name: 'CDD GUANAMBI', city: 'Guanambi', state: 'BA', region: 'Nordeste', address: 'AV DO TRABALHO 511, CENTRO INDUSTRIAL', analysis: 'A pesquisa identificou uma operadora de franquia, a Acquazero, que oferece uma opção forte e profissionalmente respaldada. A falta de outras opções facilmente detectáveis sugere que a Acquazero será um alvo primário fundamental para parceria.', suppliers: [
+                    { name: 'Acquazero Guanambi', address: 'Rua Dr. José Humberto Nunes, 489, Paraíso', phone: '(77) 99804-4066', profile: 'Unidade de franquia nacional, oferecendo padrão de serviço confiável e processos estabelecidos.' },
+                ]},
+                { id: 'conquista', name: 'CDD VITÓRIA DA CONQUISTA', city: 'Vitória da Conquista', state: 'BA', region: 'Nordeste', address: 'R I DT IND IMBORES SN, DISTRITO INDUSTRIAL', analysis: 'Vitória da Conquista demonstra um mercado com empresas modernas e com forte presença digital. A EstetiCar possui site profissional e até um aplicativo móvel. Estes são sinais de operadores sofisticados, bem equipados para as demandas de um contrato corporativo.', suppliers: [
+                    { name: 'EstetiCar - Centro de Estética', address: 'Rua D, 290, bairro Boa Vista', phone: '(77) 3424-9892', profile: 'Especializada desde 2010. Possui estrutura profissional e app próprio.' },
+                    { name: 'Glow - Estética Automotiva', address: 'Av. Santa Helena, 418 - Centro', phone: 'Não informado', profile: 'Gama completa de serviços, de lavagem a vitrificação. Opera com agendamento.' },
+                    { name: 'BOX436 Complexo Automotivo', address: 'Shopping Conquista Sul - loja E05', phone: 'Não informado', profile: 'Localizado em shopping, oferece segurança e conveniência.' },
+                ]},
+                { id: 'saoluis', name: 'CDD EQUATORIAL', city: 'São Luís', state: 'MA', region: 'Nordeste', address: 'Rodovia Barão 135, Km 16.5, s/n - Zona Rural', analysis: 'São Luís possui uma mistura de franquias (Acquazero) e fortes players independentes. A localização da unidade Ambev na BR-135 sugere que parceiros com fácil acesso a esta rota seriam preferíveis. Empresas com lojas em shoppings oferecem segurança e ambiente profissional.', suppliers: [
+                    { name: 'Acquazero São Luís', address: 'Não especificado (delivery)', phone: 'Agendamento online', profile: 'Oferece a conveniência do serviço de entrega, eliminando deslocamento.' },
+                    { name: 'Lava Meu Carango', address: 'Lojas em shoppings em São Luís', phone: '(98) 98863-2204', profile: 'Mais de 9 anos de experiência. Localização em shoppings oferece segurança.' },
+                    { name: 'Rei Cristo Higienização', address: 'Av. São Luís Rei de França, 1 - Loja 2 - Turu', phone: '(98) 99126-2508', profile: 'Referência em higienização, oferece gama completa de serviços de estética.' },
+                    { name: 'DRY TECH', address: 'Shopping da Ilha, Av. Daniel de La Touche, 987', phone: 'Não informado', profile: 'Localizado no Shopping da Ilha, oferece conveniência e segurança.' },
+                ]},
+                { id: 'imperatriz', name: 'CDD IMPERATriz', city: 'Imperatriz', state: 'MA', region: 'Nordeste', address: '77, BR 010 - Jardim Tropical', analysis: 'Imperatriz conta com a franquia Flipwash, fornecendo uma opção confiável e padronizada. Empresas locais como a PINHO AUTO SERVIÇO e o Itz Auto Center também se apresentam como operações profissionais, com contatos diretos e prontas para parcerias B2B.', suppliers: [
+                    { name: 'Flipwash Imperatriz', address: 'Av. Bernardo Sayão, 2363 - Três Poderes', phone: 'Não informado', profile: 'Unidade de franquia que promete "os melhores produtos e serviços".' },
+                    { name: 'PINHO AUTO SERVIÇO', address: 'Rua Bom Futuro 803/A, Juçara', phone: '(99) 3525-1007', profile: 'Foco em funilaria e pintura, mas oferece polimento. Bom para manutenção corretiva.' },
+                    { name: 'Itz Auto Center', address: '1A AVENIDA PEDRO NEIVA DE SANTANA, 1500', phone: '(99) 3072-8477', profile: 'Centro automotivo com contato direto e presença em redes sociais, indicando negócio moderno.' },
+                ]},
+                { id: 'goiania', name: 'CDD GOIÂNIA', city: 'Goiânia', state: 'GO', region: 'Centro-Oeste', address: 'Av. Dário Vieira Machado, 490 - Jardim Balneário Meia Ponte', analysis: 'Goiânia possui um mercado de estética automotiva altamente desenvolvido e especializado, com inúmeros "Estúdios" e "Auto Haus" premium. Isso oferece opções de altíssima qualidade, mas pode implicar em custos mais elevados. Empresas como a Brasil Lava Rápido, com múltiplas unidades, demonstram capacidade de escala.', suppliers: [
+                    { name: 'Brasil Lava Rápido', address: '3 unidades, incluindo Av. Rio Verde, 508', phone: '(62) 99242-2910', profile: 'Rede com múltiplas unidades, indicando capacidade de escala e padronização.' },
+                    { name: 'VISUAL DETAIL', address: 'Rua Paganini, Qd 08 – Lt 02 – Jardim Europa', phone: '(62) 99309-5746', profile: 'Focado em serviços de alto padrão como vitrificação e polimento técnico.' },
+                    { name: 'Guga\'s Detail | Estúdio Automotivo', address: 'Goiânia-GO', phone: '(62) 98114-4556', profile: 'Estúdio especializado com ampla gama de serviços, incluindo martelinho de ouro.' },
+                    { name: 'Trauen Autohaus', address: 'Av. Castelo Branco, 447, St. Bueno', phone: '(62) 99685-2435', profile: 'Especialista em veículos premium e importados. Ideal para veículos de maior valor.' },
+                    { name: 'Carboss - Estética Automotiva', address: 'Av. R-11, 1056, Setor Oeste', phone: '(62) 3088-6838', profile: 'Especializado em polimentos, vitrificação e lavagens premium.' },
+                ]},
+                { id: 'anapolis', name: 'CDD CEBRASA', city: 'Anápolis', state: 'GO', region: 'Centro-Oeste', address: 'BR-060, 2490', analysis: 'O mercado em Anápolis inclui fornecedores capazes de atender veículos pesados (Diesel GP), uma descoberta significativa. Além disso, a presença de prestadores de serviços móveis/delivery (Capital Estética Automotiva) oferece flexibilidade operacional, otimizando o tempo de inatividade dos veículos.', suppliers: [
+                    { name: 'Diesel GP', address: 'Avenida Brasília, Qd. 01 Lt. 21 e 22, Bairro Jóquei Clube', phone: '(62) 3314-4647', profile: 'Especializado em veículos pesados (lavagem, lubrificação). Parceiro estratégico para a frota de caminhões.' },
+                    { name: 'Maximus Duchacar', address: 'Rua Sen. Alfredo Nasser, 200, Vila Santana', phone: '(62) 99458-1203', profile: 'Ampla variedade de serviços, desde lavagens detalhadas a restauração de pintura.' },
+                    { name: 'Capital Estética Automotiva', address: 'Anápolis, GO', phone: '(62) 99500-4466', profile: 'Oferece atendimento delivery, uma grande vantagem logística para uma frota.' },
+                    { name: 'Moura Detailing', address: 'R. 19 Quadra 71, 16 - Lourdes', phone: '(62) 99533-2281', profile: 'Focado em detalhamento e estética, sugerindo serviço de maior qualidade.' },
+                ]},
+                { id: 'setelagoas', name: 'CDD SETE LAGOAS', city: 'Sete Lagoas', state: 'MG', region: 'Sudeste', address: 'R JAIR DE SOUZA FONSECA, Nº 301, SALA CONNEXT', analysis: 'Sete Lagoas possui uma mistura de grandes operações multisserviços (Rede Silva, que atende caminhões) e centros de estética especializados. A presença de uma franquia Acquazero fornece uma opção padronizada, enquanto empresas como a POLAV demonstram longa história no mercado local.', suppliers: [
+                    { name: 'Rede Silva', address: 'Av. Pref. Alberto Moura 2500 - Várzea', phone: '(31) 99937-9053', profile: 'Grande estrutura que oferece lava-jato, mecânica e borracharia para caminhões. Parceiro ideal para a frota pesada.' },
+                    { name: 'POLAV POLIMENTO E LAVACAO', address: 'R Cachoeira Da Prata, 554, Jardim Arizona', phone: '(31) 3771-2360', profile: 'Empresa estabelecida, especializada em polimento e lavação.' },
+                    { name: 'Acquazero Sete Lagoas', address: 'Não especificado (delivery)', phone: 'Agendamento online', profile: 'Oferece a conveniência do serviço delivery com a garantia de uma grande franquia.' },
+                    { name: 'Estoflimp', address: 'Avenida Antônio Olinto, 1239 - Centro', phone: '(31) 99596-1789', profile: 'Centro de estética interna, especializado em limpeza a seco e higienização. Ideal para manutenção interna.' },
+                    { name: 'Rubinho Pinturas Automotivas', address: 'Av. Pref. Alberto Moura, 323', phone: '(31) 3774-9972', profile: 'Especialista em pintura e polimento. Ótima opção para reparo e restauração estética.' },
+                ]},
+            ]
+        };
+
+        document.addEventListener('DOMContentLoaded', () => {
+            const regionFilter = document.getElementById('regionFilter');
+            const stateFilter = document.getElementById('stateFilter');
+            const unitFilter = document.getElementById('unitFilter');
+            const resetButton = document.getElementById('resetButton');
+            const unitDetailContainer = document.getElementById('unitDetailContainer');
+            const initialMessage = document.getElementById('initialMessage');
+            const geminiModal = document.getElementById('geminiModal');
+            const closeModalBtn = document.getElementById('closeModalBtn');
+            const copyMessageBtn = document.getElementById('copyMessageBtn');
+            const generatedMessage = document.getElementById('generatedMessage');
+            const loader = document.getElementById('loader');
+            const messageContent = document.getElementById('messageContent');
+            const copyFeedback = document.getElementById('copyFeedback');
+            const addUnitForm = document.getElementById('addUnitForm');
+            const addUnitBtnText = document.getElementById('addUnitBtnText');
+            const addUnitLoader = document.getElementById('addUnitLoader');
+            const addUnitFeedback = document.getElementById('addUnitFeedback');
+
+            let suppliersChart = null;
+            let currentUnit = null;
+            
+            function initApp() {
+                populateRegions();
+                renderChart();
+                addUnitForm.addEventListener('submit', handleAddUnit);
+            }
+
+            function populateRegions() {
+                const currentVal = regionFilter.value;
+                regionFilter.innerHTML = '<option value="">Selecione uma Região</option>';
+                const regions = [...new Set(data.units.map(unit => unit.region))];
+                regions.sort().forEach(region => {
+                    const option = document.createElement('option');
+                    option.value = region;
+                    option.textContent = region;
+                    regionFilter.appendChild(option);
+                });
+                regionFilter.value = currentVal;
+            }
+
+            function populateStates(region) {
+                const currentVal = stateFilter.value;
+                stateFilter.innerHTML = '<option value="">Selecione um Estado</option>';
+                unitFilter.innerHTML = '<option value="">Selecione uma Unidade</option>';
+                stateFilter.disabled = true;
+                unitFilter.disabled = true;
+
+                if (region) {
+                    const states = [...new Set(data.units.filter(unit => unit.region === region).map(unit => unit.state))];
+                    states.sort().forEach(state => {
+                        const option = document.createElement('option');
+                        option.value = state;
+                        option.textContent = state;
+                        stateFilter.appendChild(option);
+                    });
+                    stateFilter.disabled = false;
+                    stateFilter.value = currentVal;
+                }
+            }
+
+            function populateUnits(state) {
+                const currentVal = unitFilter.value;
+                unitFilter.innerHTML = '<option value="">Selecione uma Unidade</option>';
+                unitFilter.disabled = true;
+
+                if (state) {
+                    const units = data.units.filter(unit => unit.state === state);
+                    units.sort((a,b) => a.name.localeCompare(b.name)).forEach(unit => {
+                        const option = document.createElement('option');
+                        option.value = unit.id;
+                        option.textContent = unit.name;
+                        unitFilter.appendChild(option);
+                    });
+                    unitFilter.disabled = false;
+                    unitFilter.value = currentVal;
+                }
+            }
+            
+            function displayUnitDetails(unitId) {
+                initialMessage.classList.add('hidden');
+                const unit = data.units.find(u => u.id === unitId);
+                currentUnit = unit;
+                if (!unit) {
+                    resetDetailsView();
+                    return;
+                };
+
+                let suppliersHtml = unit.suppliers.map((s, index) => `
+                    <tr class="border-b hover:bg-gray-50">
+                        <td class="p-3 font-medium text-gray-800">${s.name}</td>
+                        <td class="p-3 text-gray-600">${s.address}</td>
+                        <td class="p-3 text-gray-600">${s.phone || 'Não informado'}</td>
+                        <td class="p-3 text-gray-600">${s.profile}</td>
+                        <td class="p-3 text-center">
+                            <button data-supplier-index="${index}" class="generate-btn bg-blue-100 text-blue-800 text-xs font-semibold px-2.5 py-1.5 rounded-full hover:bg-blue-200 transition-colors">Gerar Mensagem ✨</button>
+                        </td>
+                    </tr>
+                `).join('');
+
+                unitDetailContainer.innerHTML = `
+                    <h3>${unit.name} - ${unit.city}, ${unit.state}</h3>
+                    <p class="text-gray-500 mb-4 text-sm"><strong>Endereço:</strong> ${unit.address}</p>
+                    
+                    <h4>Análise do Mercado Local</h4>
+                    <p class="text-gray-600 bg-blue-50 p-4 rounded-lg">${unit.analysis}</p>
+
+                    <h4>Potenciais Parceiros de Serviço</h4>
+                    <input type="text" id="supplierSearch" placeholder="Buscar fornecedor por nome..." class="w-full p-2 border border-gray-300 rounded-md mb-4">
+                    <div class="overflow-x-auto">
+                        <table id="supplierTable" class="w-full text-sm text-left">
+                            <thead class="bg-gray-100 text-gray-600 uppercase">
+                                <tr>
+                                    <th class="p-3">Nome</th>
+                                    <th class="p-3">Endereço</th>
+                                    <th class="p-3">Telefone</th>
+                                    <th class="p-3">Perfil de Serviço</th>
+                                    <th class="p-3 text-center">Ações</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${suppliersHtml}
+                            </tbody>
+                        </table>
+                    </div>
+                    <div class="mt-8 card p-6 bg-gray-50">
+                        <h4 class="mb-4">Adicionar Fornecedor Manualmente</h4>
+                        <form id="addSupplierForm" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <input type="text" id="newSupplierName" placeholder="Nome do Fornecedor" class="w-full p-2 border border-gray-300 rounded-md" required>
+                            <input type="text" id="newSupplierAddress" placeholder="Endereço" class="w-full p-2 border border-gray-300 rounded-md" required>
+                            <input type="text" id="newSupplierPhone" placeholder="Telefone" class="w-full p-2 border border-gray-300 rounded-md">
+                            <textarea id="newSupplierProfile" placeholder="Perfil do Serviço" rows="2" class="md:col-span-2 w-full p-2 border border-gray-300 rounded-md" required></textarea>
+                            <button type="submit" class="md:col-span-2 w-full bg-blue-600 text-white p-2 rounded-lg hover:bg-blue-700 transition duration-300">Adicionar Fornecedor</button>
+                        </form>
+                    </div>
+                `;
+                
+                document.getElementById('supplierSearch').addEventListener('keyup', filterSuppliers);
+                document.querySelectorAll('.generate-btn').forEach(btn => {
+                    btn.addEventListener('click', handleGenerateMessageClick);
+                });
+                document.getElementById('addSupplierForm').addEventListener('submit', handleAddSupplier);
+            }
+
+            async function handleAddUnit(event) {
+                event.preventDefault();
+                addUnitBtnText.classList.add('hidden');
+                addUnitLoader.classList.remove('hidden');
+                addUnitFeedback.textContent = '';
+
+                const newUnit = {
+                    id: 'new_' + Date.now(),
+                    name: document.getElementById('newUnitName').value,
+                    city: document.getElementById('newUnitCity').value,
+                    state: document.getElementById('newUnitState').value.toUpperCase(),
+                    region: document.getElementById('newUnitRegion').value,
+                    address: document.getElementById('newUnitAddress').value,
+                    analysis: 'Análise de mercado gerada por IA com base na localização.',
+                    suppliers: []
+                };
+
+                const prompt = `Encontre 5 fornecedores de serviços de lavagem de carros ou estética automotiva na cidade de ${newUnit.city}, ${newUnit.state}. Forneça nome, endereço, telefone e um breve perfil para cada um.`;
+                
+                const schema = {
+                    type: "ARRAY",
+                    items: {
+                        type: "OBJECT",
+                        properties: {
+                            "name": { "type": "STRING" },
+                            "address": { "type": "STRING" },
+                            "phone": { "type": "STRING" },
+                            "profile": { "type": "STRING" }
+                        },
+                        "required": ["name", "address", "profile"]
+                    }
+                };
+
+                try {
+                    const suppliersJson = await callGeminiApi(prompt, schema);
+                    newUnit.suppliers = suppliersJson;
+                    
+                    data.units.push(newUnit);
+                    addUnitForm.reset();
+                    addUnitFeedback.textContent = 'Unidade e fornecedores adicionados com sucesso!';
+                    addUnitFeedback.className = 'text-green-600 mt-4';
+                    
+                    updateAll();
+                    
+                    regionFilter.value = newUnit.region;
+                    populateStates(newUnit.region);
+                    stateFilter.value = newUnit.state;
+                    populateUnits(newUnit.state);
+                    unitFilter.value = newUnit.id;
+                    displayUnitDetails(newUnit.id);
+
+                } catch (error) {
+                    console.error("Error processing new unit:", error);
+                    addUnitFeedback.textContent = `Erro ao buscar fornecedores: ${error.message}. Tente novamente.`;
+                    addUnitFeedback.className = 'text-red-600 mt-4';
+                } finally {
+                    addUnitBtnText.classList.remove('hidden');
+                    addUnitLoader.classList.add('hidden');
+                }
+            }
+
+            function handleAddSupplier(event) {
+                event.preventDefault();
+                const newSupplier = {
+                    name: document.getElementById('newSupplierName').value,
+                    address: document.getElementById('newSupplierAddress').value,
+                    phone: document.getElementById('newSupplierPhone').value || 'Não informado',
+                    profile: document.getElementById('newSupplierProfile').value
+                };
+                
+                const unitIndex = data.units.findIndex(u => u.id === currentUnit.id);
+                if (unitIndex > -1) {
+                    data.units[unitIndex].suppliers.push(newSupplier);
+                    displayUnitDetails(currentUnit.id);
+                    renderChart();
+                }
+            }
+
+            async function handleGenerateMessageClick(event) {
+                const supplierIndex = event.target.dataset.supplierIndex;
+                const supplier = currentUnit.suppliers[supplierIndex];
+                
+                showModal();
+                
+                const prompt = `Gere uma mensagem de contato profissional, curta e amigável em português do Brasil para iniciar uma parceria. Meu contexto: Eu trabalho para um projeto da Ambev. Empresa que estou contatando: ${supplier.name}. Nosso centro de distribuição Ambev próximo a eles é: ${currentUnit.name}. A mensagem deve ser um e-mail, começando com "Prezados da ${supplier.name}," e terminando com "Atenciosamente,". O objetivo é apresentar a oportunidade de prestar serviços de lavagem e estética automotiva para a frota da Ambev na região. Mantenha o tom profissional, mas acessível.`;
+                
+                try {
+                    const text = await callGeminiApi(prompt);
+                    generatedMessage.value = text;
+                    loader.classList.add('hidden');
+                    messageContent.classList.remove('hidden');
+                } catch (error) {
+                    console.error("Error calling Gemini API:", error);
+                    generatedMessage.value = "Desculpe, ocorreu um erro ao gerar a mensagem. Por favor, tente novamente.";
+                    loader.classList.add('hidden');
+                    messageContent.classList.remove('hidden');
+                }
+            }
+
+            async function callGeminiApi(prompt, jsonSchema = null) {
+                const apiKey = ""; 
+                const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${apiKey}`;
+                
+                const payload = { 
+                    contents: [{ role: "user", parts: [{ text: prompt }] }]
+                };
+
+                if (jsonSchema) {
+                    payload.generationConfig = {
+                        responseMimeType: "application/json",
+                        responseSchema: jsonSchema
+                    };
+                }
+
+                const response = await fetch(apiUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                if (!response.ok) {
+                    const errorBody = await response.text();
+                    console.error("API Error Response:", errorBody);
+                    throw new Error(`A chamada à API falhou com o status: ${response.status}`);
+                }
+
+                const result = await response.json();
+
+                if (result.candidates && result.candidates[0].content && result.candidates[0].content.parts) {
+                    const responseText = result.candidates[0].content.parts[0].text;
+                    return jsonSchema ? JSON.parse(responseText) : responseText;
+                } else {
+                    if (result.promptFeedback && result.promptFeedback.blockReason) {
+                        throw new Error(`O prompt foi bloqueado por segurança: ${result.promptFeedback.blockReason}`);
+                    }
+                    throw new Error("A API retornou uma resposta vazia ou inválida.");
+                }
+            }
+
+            function showModal() {
+                geminiModal.style.display = 'flex';
+                loader.classList.remove('hidden');
+                messageContent.classList.add('hidden');
+                generatedMessage.value = '';
+                copyFeedback.classList.add('hidden');
+            }
+
+            function hideModal() {
+                geminiModal.style.display = 'none';
+            }
+
+            function copyMessageToClipboard() {
+                generatedMessage.select();
+                document.execCommand('copy');
+                copyFeedback.classList.remove('hidden');
+                setTimeout(() => {
+                    copyFeedback.classList.add('hidden');
+                }, 2000);
+            }
+
+            closeModalBtn.addEventListener('click', hideModal);
+            copyMessageBtn.addEventListener('click', copyMessageToClipboard);
+
+            function filterSuppliers(event) {
+                const searchTerm = event.target.value.toLowerCase();
+                const table = document.getElementById('supplierTable');
+                const rows = table.getElementsByTagName('tr');
+
+                for (let i = 1; i < rows.length; i++) {
+                    const nameCell = rows[i].getElementsByTagName('td')[0];
+                    if (nameCell) {
+                        const nameText = nameCell.textContent || nameCell.innerText;
+                        if (nameText.toLowerCase().indexOf(searchTerm) > -1) {
+                            rows[i].style.display = "";
+                        } else {
+                            rows[i].style.display = "none";
+                        }
+                    }
+                }
+            }
+
+            function renderChart() {
+                const ctx = document.getElementById('suppliersByStateChart').getContext('2d');
+                const stateCounts = data.units.reduce((acc, unit) => {
+                    acc[unit.state] = (acc[unit.state] || 0) + (unit.suppliers ? unit.suppliers.length : 0);
+                    return acc;
+                }, {});
+
+                const sortedStates = Object.keys(stateCounts).sort((a, b) => stateCounts[b] - stateCounts[a]);
+                const sortedCounts = sortedStates.map(state => stateCounts[state]);
+
+                if (suppliersChart) {
+                    suppliersChart.destroy();
+                }
+
+                suppliersChart = new Chart(ctx, {
+                    type: 'bar',
+                    data: {
+                        labels: sortedStates,
+                        datasets: [{
+                            label: 'Nº de Fornecedores',
+                            data: sortedCounts,
+                            backgroundColor: 'rgba(59, 130, 246, 0.7)',
+                            borderColor: 'rgba(59, 130, 246, 1)',
+                            borderWidth: 1,
+                            borderRadius: 4
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        indexAxis: 'y',
+                        scales: { x: { beginAtZero: true } },
+                        plugins: { legend: { display: false } }
+                    }
+                });
+            }
+
+            function resetDetailsView() {
+                unitDetailContainer.innerHTML = '';
+                unitDetailContainer.appendChild(initialMessage);
+                initialMessage.classList.remove('hidden');
+            }
+
+            function reset() {
+                regionFilter.value = '';
+                populateStates('');
+                resetDetailsView();
+            }
+            
+            function updateAll() {
+                populateRegions();
+                populateStates(regionFilter.value);
+                populateUnits(stateFilter.value);
+                renderChart();
+            }
+
+            regionFilter.addEventListener('change', (e) => {
+                populateStates(e.target.value);
+            });
+
+            stateFilter.addEventListener('change', (e) => {
+                populateUnits(e.target.value);
+            });
+
+            unitFilter.addEventListener('change', (e) => {
+                if(e.target.value) {
+                    displayUnitDetails(e.target.value);
+                } else {
+                    resetDetailsView();
+                }
+            });
+
+            resetButton.addEventListener('click', reset);
+
+            initApp();
+        });
+    </script>
+</body>
+</html>
